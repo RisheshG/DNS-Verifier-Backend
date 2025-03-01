@@ -1,0 +1,5 @@
+Email 1,domain,MX,SPF,DKIM,DMARC
+joel.hernandez@theqbee.com,theqbee.com,true,false,true,false
+dpyron@truecloud.com,truecloud.com,true,false,true,false
+vasco@tangli.io,tangli.io,true,false,true,false
+michael@agnesintel.com,agnesintel.com,true,false,true,false

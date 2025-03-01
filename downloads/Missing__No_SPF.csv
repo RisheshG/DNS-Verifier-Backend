@@ -1,0 +1,3 @@
+Email 1,domain,MX,SPF,DKIM,DMARC
+akemi@hiddengears.com,hiddengears.com,true,false,true,true
+marianneb@talon-sec.com,talon-sec.com,true,false,true,true

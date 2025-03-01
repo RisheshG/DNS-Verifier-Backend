@@ -1,0 +1,3 @@
+Email 1,domain,MX,SPF,DKIM,DMARC
+jesse.wardle@blockchainconsultants.io,blockchainconsultants.io,false,false,false,false
+michael@quoala.co,quoala.co,false,false,false,false

@@ -1,0 +1,21 @@
+Email 1,domain,MX,SPF,DKIM,DMARC
+tracy.neal@cpgdata.com,cpgdata.com,true,false,false,true
+ac@quikliq.com,quikliq.com,true,false,false,true
+eric@valandergroup.com,valandergroup.com,true,false,false,true
+michaelblake@insurancelabs.com,insurancelabs.com,true,false,false,true
+ralph@innovapad.com,innovapad.com,true,false,false,true
+tayler@enji.co,enji.co,true,false,false,true
+jeph@wemu.co,wemu.co,true,false,false,true
+corentin.bernard@accolade-pro.com,accolade-pro.com,true,false,false,true
+mike@voterheads.com,voterheads.com,true,false,false,true
+joyyanyuan@blingyte.com,blingyte.com,true,false,false,true
+aaron@instinct.is,instinct.is,true,false,false,true
+marc@crea8.studio,crea8.studio,true,false,false,true
+jvelasquez@cleargem.com,cleargem.com,true,false,false,true
+brad@zyratalk.com,zyratalk.com,true,false,false,true
+nelly@spark-founders.com,spark-founders.com,true,false,false,true
+bwilson@engagedai.io,engagedai.io,true,false,false,true
+melissa@daash.co,daash.co,true,false,false,true
+preston@approvedsocial.io,approvedsocial.io,true,false,false,true
+moran@visually.io,visually.io,true,false,false,true
+gdavis@velocityz.com,velocityz.com,true,false,false,true

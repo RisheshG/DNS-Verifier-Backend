@@ -1,0 +1,3 @@
+Email 1,domain,MX,SPF,DKIM,DMARC
+andrei@servicevista.io,servicevista.io,false,true,false,false
+david_kaupp@easybeasy.com,easybeasy.com,false,true,false,false

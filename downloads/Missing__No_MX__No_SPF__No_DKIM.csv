@@ -1,0 +1,3 @@
+Email 1,domain,MX,SPF,DKIM,DMARC
+rob@bnbcalc.com,bnbcalc.com,false,false,false,true
+davids@arica.io,arica.io,false,false,false,true
