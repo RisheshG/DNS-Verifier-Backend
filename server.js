@@ -95,6 +95,10 @@ const checkDNS = async (domain) => {
     return results;
 };
 
+app.get("/", (req, res) => {
+    res.send("DNS Verifier Backend is Running");
+});
+
 app.post("/upload", upload.single("file"), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
