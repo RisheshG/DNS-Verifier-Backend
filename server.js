@@ -5,11 +5,14 @@ const fs = require("fs");
 const path = require("path");
 const dns = require("dns");
 const fastCsv = require("fast-csv");
+const admin = require("firebase-admin");
+const { getAuth } = require("firebase-admin/auth");
 
-const downloadsDir = path.join(__dirname, "downloads");
-if (!fs.existsSync(downloadsDir)) {
-    fs.mkdirSync(downloadsDir);
-}
+// Initialize Firebase Admin
+const serviceAccount = require("./dns-verifier-firebase-adminsdk-fbsvc-e7ccaed22e.json");
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+});
 
 const app = express();
 const PORT = 5001;
@@ -19,33 +22,21 @@ app.use(express.json());
 
 const upload = multer({ dest: "uploads/" });
 
+// Helper function to extract domain from email
 const getDomain = (email) => {
     const parts = email.split("@");
     return parts.length === 2 ? parts[1] : null;
 };
 
+// Function to check DNS records
 const checkDNS = async (domain) => {
-    const results = {
-        MX: false,
-        SPF: false,
-        DKIM: false,
-        DMARC: false,
-    };
-
-    // List of common email providers
+    const results = { MX: false, SPF: false, DKIM: false, DMARC: false };
     const commonEmailProviders = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "aol.com", "icloud.com"];
 
-    // If the domain is a common email provider, skip DNS checks and return all records as found
     if (commonEmailProviders.includes(domain)) {
-        return {
-            MX: true,
-            SPF: true,
-            DKIM: true,
-            DMARC: true,
-        };
+        return { MX: true, SPF: true, DKIM: true, DMARC: true };
     }
 
-    // Perform DNS checks for non-common domains
     try {
         results.MX = (await dns.promises.resolveMx(domain)).length > 0;
     } catch {}
@@ -59,7 +50,6 @@ const checkDNS = async (domain) => {
 
     try {
         let dkimSelectors = ["dkim", "google", "selector1", "selector2"];
-
         const response = await fetch(`https://dns.google/resolve?name=${domain}&type=TXT`);
         const data = await response.json();
 
@@ -75,12 +65,12 @@ const checkDNS = async (domain) => {
         }
 
         const dkimRecords = await Promise.all(
-            dkimSelectors.map(selector => 
+            dkimSelectors.map(selector =>
                 dns.promises.resolveTxt(`${selector}._domainkey.${domain}`).catch(() => [])
             )
         );
 
-        results.DKIM = dkimRecords.some(record => 
+        results.DKIM = dkimRecords.some(record =>
             record.some(txt => txt.join("").includes("v=DKIM1"))
         );
     } catch (error) {
@@ -95,10 +85,71 @@ const checkDNS = async (domain) => {
     return results;
 };
 
-app.get("/", (req, res) => {
-    res.send("DNS Verifier Backend is Running");
+// User Registration Route
+app.post("/register", async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) {
+        return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    try {
+        const userRecord = await getAuth().createUser({
+            email,
+            password,
+        });
+
+        res.status(201).json({ message: "User registered successfully", user: userRecord });
+    } catch (error) {
+        console.error("Registration error:", error);
+        res.status(500).json({ error: error.message });
+    }
 });
 
+// User Login Route
+app.post("/login", async (req, res) => {
+    const { email } = req.body;
+    if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+    }
+
+    try {
+        const user = await getAuth().getUserByEmail(email);
+
+        if (!user) {
+            return res.status(400).json({ error: "User not found" });
+        }
+
+        const customToken = await getAuth().createCustomToken(user.uid);
+        res.json({ token: customToken });
+    } catch (error) {
+        console.error("Login error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+// Middleware to verify Firebase token
+const verifyFirebaseToken = async (req, res, next) => {
+    const token = req.headers.authorization?.split("Bearer ")[1];
+
+    if (!token) {
+        return res.status(401).json({ error: "Unauthorized: No token provided" });
+    }
+
+    try {
+        const decodedToken = await getAuth().verifyIdToken(token);
+        req.user = decodedToken;
+        next();
+    } catch (error) {
+        res.status(401).json({ error: "Unauthorized: Invalid token" });
+    }
+};
+
+// Protected Route Example
+app.get("/protected", verifyFirebaseToken, (req, res) => {
+    res.json({ message: "This is a protected route", user: req.user });
+});
+
+// File Upload and DNS Verification
 app.post("/upload", upload.single("file"), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
