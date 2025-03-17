@@ -183,7 +183,10 @@ app.post("/upload", upload.single("file"), async (req, res) => {
                     : "All Records Found";
 
                 if (!categories[category]) categories[category] = [];
-                categories[category].push({ ...row, domain, ...dnsResults });
+                
+                // Retain original columns and append DNS results
+                const resultRow = { ...row, domain, ...dnsResults };
+                categories[category].push(resultRow);
             }
 
             const downloadLinks = [];
@@ -191,7 +194,11 @@ app.post("/upload", upload.single("file"), async (req, res) => {
             for (const category in categories) {
                 const outputFile = `downloads/${category.replace(/[^a-zA-Z0-9]/g, "_")}.csv`;
                 const ws = fs.createWriteStream(outputFile);
-                fastCsv.write(categories[category], { headers: true }).pipe(ws);
+                
+                // Write the original headers along with the new DNS result headers
+                const headers = Object.keys(rows[0]).concat(["domain", "MX", "SPF", "DKIM", "DMARC"]);
+                fastCsv.write(categories[category], { headers }).pipe(ws);
+                
                 downloadLinks.push({ category, file: outputFile });
             }
 
