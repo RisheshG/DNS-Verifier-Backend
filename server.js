@@ -33,54 +33,49 @@ const checkDNS = async (domain) => {
     const results = { MX: false, SPF: false, DKIM: false, DMARC: false };
     const commonEmailProviders = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "aol.com", "icloud.com"];
 
+    // Skip DNS checks for common email providers
     if (commonEmailProviders.includes(domain)) {
         return { MX: true, SPF: true, DKIM: true, DMARC: true };
     }
 
+    // Check MX records
     try {
-        results.MX = (await dns.promises.resolveMx(domain)).length > 0;
-    } catch {}
+        const mxRecords = await dns.promises.resolveMx(domain);
+        results.MX = mxRecords.length > 0;
+    } catch (error) {
+        console.error(`MX lookup failed for ${domain}:`, error.message);
+    }
 
+    // Check SPF records
     try {
         const txtRecords = await dns.promises.resolveTxt(domain);
-        txtRecords.forEach((record) => {
-            if (record.join("").includes("v=spf1")) results.SPF = true;
-        });
-    } catch {}
+        results.SPF = txtRecords.some((record) => record.join("").includes("v=spf1"));
+    } catch (error) {
+        console.error(`SPF lookup failed for ${domain}:`, error.message);
+    }
 
+    // Check DKIM records
     try {
-        let dkimSelectors = ["dkim", "google", "selector1", "selector2"];
-        const response = await fetch(`https://dns.google/resolve?name=${domain}&type=TXT`);
-        const data = await response.json();
-
-        if (data.Answer) {
-            data.Answer.forEach((record) => {
-                if (record.data.includes("v=DKIM1")) {
-                    const match = record.name.match(/([^\.]+)\._domainkey\./);
-                    if (match) {
-                        dkimSelectors.push(match[1]);
-                    }
-                }
-            });
-        }
-
+        const dkimSelectors = ["dkim", "google", "selector1", "selector2"];
         const dkimRecords = await Promise.all(
-            dkimSelectors.map(selector =>
+            dkimSelectors.map((selector) =>
                 dns.promises.resolveTxt(`${selector}._domainkey.${domain}`).catch(() => [])
             )
         );
-
-        results.DKIM = dkimRecords.some(record =>
-            record.some(txt => txt.join("").includes("v=DKIM1"))
+        results.DKIM = dkimRecords.some((record) =>
+            record.some((txt) => txt.join("").includes("v=DKIM1"))
         );
     } catch (error) {
-        console.error("Error fetching DKIM selectors:", error);
+        console.error(`DKIM lookup failed for ${domain}:`, error.message);
     }
 
+    // Check DMARC records
     try {
         const dmarcRecords = await dns.promises.resolveTxt(`_dmarc.${domain}`).catch(() => []);
         results.DMARC = dmarcRecords.some((record) => record.join("").includes("v=DMARC1"));
-    } catch {}
+    } catch (error) {
+        console.error(`DMARC lookup failed for ${domain}:`, error.message);
+    }
 
     return results;
 };
@@ -159,34 +154,53 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const results = [];
     const categories = {};
 
+    const batchSize = 1000; // Process 1000 rows at a time
+    let batch = [];
+
     fs.createReadStream(filePath)
         .pipe(fastCsv.parse({ headers: true }))
-        .on("data", (row) => rows.push(row))
+        .on("data", (row) => {
+            batch.push(row);
+            if (batch.length >= batchSize) {
+                rows.push(...batch);
+                batch = [];
+            }
+        })
         .on("end", async () => {
-            for (const row of rows) {
-                const email = row[selectedColumn];
-                if (!email) continue;
+            if (batch.length > 0) {
+                rows.push(...batch);
+            }
 
-                const domain = getDomain(email);
-                if (!domain) continue;
+            for (let i = 0; i < rows.length; i += batchSize) {
+                const batchRows = rows.slice(i, i + batchSize);
+                const batchResults = await Promise.all(batchRows.map(async (row) => {
+                    const email = row[selectedColumn];
+                    if (!email) return null;
 
-                const dnsResults = await checkDNS(domain);
+                    const domain = getDomain(email);
+                    if (!domain) return null;
 
-                const missingRecords = [];
-                if (!dnsResults.MX) missingRecords.push("No MX");
-                if (!dnsResults.SPF) missingRecords.push("No SPF");
-                if (!dnsResults.DKIM) missingRecords.push("No DKIM");
-                if (!dnsResults.DMARC) missingRecords.push("No DMARC");
+                    const dnsResults = await checkDNS(domain);
 
-                const category = missingRecords.length
-                    ? `Missing: ${missingRecords.join(", ")}`
-                    : "All Records Found";
+                    const missingRecords = [];
+                    if (!dnsResults.MX) missingRecords.push("No MX");
+                    if (!dnsResults.SPF) missingRecords.push("No SPF");
+                    if (!dnsResults.DKIM) missingRecords.push("No DKIM");
+                    if (!dnsResults.DMARC) missingRecords.push("No DMARC");
 
-                if (!categories[category]) categories[category] = [];
-                
-                // Retain original columns and append DNS results
-                const resultRow = { ...row, domain, ...dnsResults };
-                categories[category].push(resultRow);
+                    const category = missingRecords.length
+                        ? `Missing: ${missingRecords.join(", ")}`
+                        : "All Records Found";
+
+                    if (!categories[category]) categories[category] = [];
+
+                    // Retain original columns and append DNS results
+                    const resultRow = { ...row, domain, ...dnsResults };
+                    categories[category].push(resultRow);
+                    return resultRow;
+                }));
+
+                results.push(...batchResults.filter((row) => row !== null));
             }
 
             const downloadLinks = [];
@@ -194,11 +208,11 @@ app.post("/upload", upload.single("file"), async (req, res) => {
             for (const category in categories) {
                 const outputFile = `downloads/${category.replace(/[^a-zA-Z0-9]/g, "_")}.csv`;
                 const ws = fs.createWriteStream(outputFile);
-                
+
                 // Write the original headers along with the new DNS result headers
                 const headers = Object.keys(rows[0]).concat(["domain", "MX", "SPF", "DKIM", "DMARC"]);
                 fastCsv.write(categories[category], { headers }).pipe(ws);
-                
+
                 downloadLinks.push({ category, file: outputFile });
             }
 
