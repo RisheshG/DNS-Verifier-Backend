@@ -46,7 +46,7 @@ const checkDNS = async (domain) => {
         console.error(`SPF lookup failed for ${domain}:`, error.message);
     }
 
-    // Check DKIM records (NEW, expanded)
+    // Check DKIM records (expanded selectors)
     try {
         const checkDKIM = async (domain, selector = null) => {
             const selectors = selector 
@@ -59,11 +59,9 @@ const checkDNS = async (domain) => {
                     "zoho", "zoho1", "zoho2", "zoho3",
                     "mandrill", "mailchimp",
                     "amazonses", "ses",
-                    "pm1", "pm2",
-                    "fm1", "fm2",
-                    "yahoo", "yahoo1", "yahoo2",
-                    "protonmail",
-                    "mx1", "mx2", "smtp1", "smtp2", "sig", "dkim1", "dkim2", "dkim3", "email1", "email2"
+                    "pm1", "pm2", "fm1", "fm2", "yahoo", "yahoo1", "yahoo2",
+                    "protonmail", "mx1", "mx2", "smtp1", "smtp2", "sig", "dkim1", "dkim2", "dkim3",
+                    "email1", "email2"
                 ];
 
             for (const sel of selectors) {
@@ -164,7 +162,12 @@ app.post("/upload", upload.single("file"), async (req, res) => {
                 const headers = Object.keys(rows[0]).concat(["domain", "MX", "SPF", "DKIM", "DMARC"]);
                 fastCsv.write(categories[category], { headers }).pipe(ws);
 
-                downloadLinks.push({ category, file: outputFile });
+                // Include count of emails per category
+                downloadLinks.push({ 
+                    category, 
+                    count: categories[category].length, 
+                    file: outputFile 
+                });
             }
 
             res.json({ downloadLinks });
