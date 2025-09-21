@@ -46,17 +46,40 @@ const checkDNS = async (domain) => {
         console.error(`SPF lookup failed for ${domain}:`, error.message);
     }
 
-    // Check DKIM records
+    // Check DKIM records (NEW, expanded)
     try {
-        const dkimSelectors = ["dkim", "google", "selector1", "selector2"];
-        const dkimRecords = await Promise.all(
-            dkimSelectors.map((selector) =>
-                dns.promises.resolveTxt(`${selector}._domainkey.${domain}`).catch(() => [])
-            )
-        );
-        results.DKIM = dkimRecords.some((record) =>
-            record.some((txt) => txt.join("").includes("v=DKIM1"))
-        );
+        const checkDKIM = async (domain, selector = null) => {
+            const selectors = selector 
+                ? [selector] 
+                : [
+                    "default", "mail", "email", "smtp", "mx", "selector", "dkim", "sig1", "key1", "key2",
+                    "s1", "s2", "k1", "k2", "m1", "m2",
+                    "google", "google1", "google2", "google3", "google4",
+                    "selector1", "selector2", "selector3", "selector4",
+                    "zoho", "zoho1", "zoho2", "zoho3",
+                    "mandrill", "mailchimp",
+                    "amazonses", "ses",
+                    "pm1", "pm2",
+                    "fm1", "fm2",
+                    "yahoo", "yahoo1", "yahoo2",
+                    "protonmail",
+                    "mx1", "mx2", "smtp1", "smtp2", "sig", "dkim1", "dkim2", "dkim3", "email1", "email2"
+                ];
+
+            for (const sel of selectors) {
+                try {
+                    const records = await dns.promises.resolveTxt(`${sel}._domainkey.${domain}`);
+                    if (records.some(r => r.join("").includes("v=DKIM1"))) {
+                        return true;
+                    }
+                } catch (error) {
+                    continue; // ignore if selector not found
+                }
+            }
+            return false;
+        };
+
+        results.DKIM = await checkDKIM(domain);
     } catch (error) {
         console.error(`DKIM lookup failed for ${domain}:`, error.message);
     }
