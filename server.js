@@ -5,14 +5,6 @@ const fs = require("fs");
 const path = require("path");
 const dns = require("dns");
 const fastCsv = require("fast-csv");
-const admin = require("firebase-admin");
-const { getAuth } = require("firebase-admin/auth");
-
-// Initialize Firebase Admin
-const serviceAccount = require("./dns-verifier-firebase-adminsdk-fbsvc-e7ccaed22e.json");
-admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-});
 
 const app = express();
 const PORT = 5001;
@@ -79,70 +71,6 @@ const checkDNS = async (domain) => {
 
     return results;
 };
-
-// User Registration Route
-app.post("/register", async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
-        return res.status(400).json({ error: "Email and password are required" });
-    }
-
-    try {
-        const userRecord = await getAuth().createUser({
-            email,
-            password,
-        });
-
-        res.status(201).json({ message: "User registered successfully", user: userRecord });
-    } catch (error) {
-        console.error("Registration error:", error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// User Login Route
-app.post("/login", async (req, res) => {
-    const { email } = req.body;
-    if (!email) {
-        return res.status(400).json({ error: "Email is required" });
-    }
-
-    try {
-        const user = await getAuth().getUserByEmail(email);
-
-        if (!user) {
-            return res.status(400).json({ error: "User not found" });
-        }
-
-        const customToken = await getAuth().createCustomToken(user.uid);
-        res.json({ token: customToken });
-    } catch (error) {
-        console.error("Login error:", error);
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
-
-// Middleware to verify Firebase token
-const verifyFirebaseToken = async (req, res, next) => {
-    const token = req.headers.authorization?.split("Bearer ")[1];
-
-    if (!token) {
-        return res.status(401).json({ error: "Unauthorized: No token provided" });
-    }
-
-    try {
-        const decodedToken = await getAuth().verifyIdToken(token);
-        req.user = decodedToken;
-        next();
-    } catch (error) {
-        res.status(401).json({ error: "Unauthorized: Invalid token" });
-    }
-};
-
-// Protected Route Example
-app.get("/protected", verifyFirebaseToken, (req, res) => {
-    res.json({ message: "This is a protected route", user: req.user });
-});
 
 // File Upload and DNS Verification
 app.post("/upload", upload.single("file"), async (req, res) => {
