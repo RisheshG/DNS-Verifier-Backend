@@ -101,9 +101,11 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const filePath = req.file.path;
     const rows = [];
     const results = [];
-    const categories = {};
 
-    const batchSize = 1000; // Process 1000 rows at a time
+    const allRecordsFound = [];
+    const missingRecords = [];
+
+    const batchSize = 1000;
     let batch = [];
 
     fs.createReadStream(filePath)
@@ -131,41 +133,41 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
                     const dnsResults = await checkDNS(domain);
 
-                    const missingRecords = [];
-                    if (!dnsResults.MX) missingRecords.push("No MX");
-                    if (!dnsResults.SPF) missingRecords.push("No SPF");
-                    if (!dnsResults.DKIM) missingRecords.push("No DKIM");
-                    if (!dnsResults.DMARC) missingRecords.push("No DMARC");
-
-                    const category = missingRecords.length
-                        ? `Missing: ${missingRecords.join(", ")}`
-                        : "All Records Found";
-
-                    if (!categories[category]) categories[category] = [];
+                    // Check if any DNS record is missing
+                    const anyMissing = !dnsResults.MX || !dnsResults.SPF || !dnsResults.DKIM || !dnsResults.DMARC;
 
                     // Retain original columns and append DNS results
                     const resultRow = { ...row, domain, ...dnsResults };
-                    categories[category].push(resultRow);
+
+                    if (anyMissing) {
+                        missingRecords.push(resultRow);
+                    } else {
+                        allRecordsFound.push(resultRow);
+                    }
+
                     return resultRow;
                 }));
 
                 results.push(...batchResults.filter((row) => row !== null));
             }
 
+            // Prepare download links
             const downloadLinks = [];
 
-            for (const category in categories) {
-                const outputFile = `downloads/${category.replace(/[^a-zA-Z0-9]/g, "_")}.csv`;
+            const files = [
+                { name: "All_Records_Found", data: allRecordsFound },
+                { name: "Missing_Records", data: missingRecords }
+            ];
+
+            for (const file of files) {
+                const outputFile = `downloads/${file.name}.csv`;
                 const ws = fs.createWriteStream(outputFile);
-
-                // Write the original headers along with the new DNS result headers
                 const headers = Object.keys(rows[0]).concat(["domain", "MX", "SPF", "DKIM", "DMARC"]);
-                fastCsv.write(categories[category], { headers }).pipe(ws);
+                fastCsv.write(file.data, { headers }).pipe(ws);
 
-                // Include count of emails per category
                 downloadLinks.push({ 
-                    category, 
-                    count: categories[category].length, 
+                    category: file.name, 
+                    count: file.data.length, 
                     file: outputFile 
                 });
             }
