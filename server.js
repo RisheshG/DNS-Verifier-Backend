@@ -100,7 +100,6 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     const selectedColumn = req.body.column;
     const filePath = req.file.path;
     const rows = [];
-    const results = [];
 
     const allRecordsFound = [];
     const missingRecords = [];
@@ -148,8 +147,12 @@ app.post("/upload", upload.single("file"), async (req, res) => {
                     return resultRow;
                 }));
 
-                results.push(...batchResults.filter((row) => row !== null));
+                // Filter out null rows
+                batchResults.filter((row) => row !== null);
             }
+
+            // Ensure downloads folder exists
+            if (!fs.existsSync("downloads")) fs.mkdirSync("downloads");
 
             // Prepare download links
             const downloadLinks = [];
@@ -160,8 +163,10 @@ app.post("/upload", upload.single("file"), async (req, res) => {
             ];
 
             for (const file of files) {
-                const outputFile = `downloads/${file.name}.csv`;
+                const outputFile = path.join("downloads", `${file.name}.csv`);
                 const ws = fs.createWriteStream(outputFile);
+
+                // Use original headers + DNS results
                 const headers = Object.keys(rows[0]).concat(["domain", "MX", "SPF", "DKIM", "DMARC"]);
                 fastCsv.write(file.data, { headers }).pipe(ws);
 
